@@ -1,5 +1,6 @@
 from smolagents import tool
 
+
 @tool
 def get_item_price(item_name: str) -> float:
     """
@@ -40,7 +41,7 @@ def calculate_final_price(original_price: float) -> float:
 @tool
 def check_approval_status(final_price: float) -> str:
     """
-    Checks if a final price in LKR requires manager approval or is auto-approved.
+    Checks if a final price in LKR requires manager approval (strictly above 200,000 LKR) or is auto-approved.
 
     Args:
         final_price: The final amount of LKR to be paid by the customer.
@@ -51,10 +52,10 @@ def check_approval_status(final_price: float) -> str:
         return "AUTO_APPROVED"
 
 
-# --- QUICK LOCAL TEST (3-TOOL PIPELINE) ---
-item = "Laptop"
-base = get_item_price(item)
-with_vat = calculate_final_price(base)
-status = check_approval_status(with_vat)
-
-print(f"Pipeline Result for {item}: Base={base} LKR -> With VAT={with_vat} LKR -> Status={status}")
+if __name__ == "__main__":
+    # --- QUICK LOCAL TEST (Only runs when tools.py is executed directly) ---
+    item = "Laptop"
+    base = get_item_price(item)
+    with_vat = calculate_final_price(base)
+    status = check_approval_status(with_vat)
+    print(f"Pipeline Result for {item}: Base={base} LKR -> With VAT={with_vat} LKR -> Status={status}")
