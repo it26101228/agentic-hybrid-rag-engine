@@ -1,61 +1,99 @@
+import sys
+from pathlib import Path
 from smolagents import tool
+
+# 1. Connect src/agent/tools.py to src/ingestion and src/retrieval
+SRC_DIR = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = SRC_DIR.parent
+INGESTION_DIR = SRC_DIR / "ingestion"
+RETRIEVAL_DIR = SRC_DIR / "retrieval"
+POLICY_FILE = PROJECT_ROOT / "data" / "shop_policies.txt"
+
+for folder in (INGESTION_DIR, RETRIEVAL_DIR):
+    if str(folder) not in sys.path:
+        sys.path.insert(0, str(folder))
+
+from loader import load_and_chunk_file
+from retriever import retrieve_top_chunks
 
 
 @tool
 def get_item_price(item_name: str) -> float:
     """
-    Finds the base price of an item in LKR from the shop inventory.
+    Looks up the base price of an electronic item in the shop inventory in LKR.
 
     Args:
-        item_name: The name of the item before getting the relevant price.
+        item_name: The name of the item to look up (e.g., 'laptop', 'monitor', 'mouse').
     """
     prices = {
         "laptop": 250000.0,
-        "monitor": 45000.0,
+        "monitor": 75000.0,
         "mouse": 3500.0,
     }
-
-    price = prices.get(item_name.lower())
-
-    if price is None:
+    clean_name = item_name.strip().lower()
+    if clean_name not in prices:
         raise ValueError(f"Error: '{item_name}' is not in the shop inventory.")
-
-    return round(price, 2)
+    return prices[clean_name]
 
 
 @tool
 def calculate_final_price(original_price: float) -> float:
     """
-    Calculate the final price in LKR after adding 18% VAT. Use this tool whenever someone asks for the final price of an item.
+    Calculates the final price in LKR after adding 18% Sri Lankan VAT.
 
     Args:
-        original_price: The starting price of the item in LKR before adding VAT.
+        original_price: The base price of the item before tax.
     """
     if original_price <= 0:
-        raise ValueError("Error: original_price must be greater than 0 LKR.")
-
-    final_price = original_price + original_price * 0.18
-    return round(final_price, 2)
+        raise ValueError("Error: Price must be greater than 0.")
+    return round(original_price * 1.18, 2)
 
 
 @tool
 def check_approval_status(final_price: float) -> str:
     """
-    Checks if a final price in LKR requires manager approval (strictly above 200,000 LKR) or is auto-approved.
+    Checks whether a purchase requires manager approval based on the final VAT-inclusive price.
 
     Args:
-        final_price: The final amount of LKR to be paid by the customer.
+        final_price: The final price in LKR including 18% VAT.
     """
-    if final_price > 200000.0:
+    if final_price <= 0:
+        raise ValueError("Error: Final price must be greater than 0.")
+    if final_price > 100000:
         return "MANAGER_APPROVAL_REQUIRED"
-    else:
-        return "AUTO_APPROVED"
+    return "AUTO_APPROVED"
+
+
+@tool
+def search_shop_policies(query: str) -> str:
+    """
+    Searches the official store policy and warranty manual for rules on warranties,
+    dead pixels, returns, refunds, and delivery/shipping costs across Sri Lanka.
+
+    Args:
+        query: Search keywords describing the policy question (e.g., 'Anuradhapura delivery cost').
+    """
+    if not query or not query.strip():
+        raise ValueError("Error: search query cannot be empty.")
+
+    chunks = load_and_chunk_file(file_path=POLICY_FILE, chunk_size=25, overlap=5)
+    results = retrieve_top_chunks(query=query, chunks=chunks, top_k=2)
+
+    if not results:
+        return "No matching policies or instructions found. Do NOT guess or invent a policy or instructions."
+
+    formatted_cards = []
+    for match in results:
+        formatted_cards.append(
+            f"[Card {match['chunk_id']} | Source: {match['source']} | Score: {match['score']}]: {match['text']}"
+        )
+
+    return "\n".join(formatted_cards)
 
 
 if __name__ == "__main__":
-    # --- QUICK LOCAL TEST (Only runs when tools.py is executed directly) ---
-    item = "Laptop"
-    base = get_item_price(item)
-    with_vat = calculate_final_price(base)
-    status = check_approval_status(with_vat)
-    print(f"Pipeline Result for {item}: Base={base} LKR -> With VAT={with_vat} LKR -> Status={status}")
+    print("=== TEST 1: VALID POLICY SEARCH (Laptop Warranty) ===")
+    print(search_shop_policies("laptop warranty years motherboard"))
+
+    print("\n=== TEST 2: MISSING POLICY GUARD (Pepperoni Pizza) ===")
+    print(search_shop_policies("pepperoni pizza restaurant"))

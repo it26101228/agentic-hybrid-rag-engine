@@ -1,2 +1,3 @@
 smolagents
 huggingface_hub
+openai
