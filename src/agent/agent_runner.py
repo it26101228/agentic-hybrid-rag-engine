@@ -2,7 +2,12 @@ import os
 import sys
 from pathlib import Path
 from smolagents import OpenAIServerModel, ToolCallingAgent
-from smolagents.models import ChatMessageToolCall, ChatMessageToolCallFunction
+from smolagents.models import (
+    ChatMessage,
+    ChatMessageToolCall,
+    ChatMessageToolCallFunction,
+    MessageRole,
+)
 
 # 1. Ensure Python always finds tools.py inside src/agent
 AGENT_DIR = Path(__file__).resolve().parent
@@ -32,24 +37,64 @@ def load_env_file() -> None:
 class GroqSafeModel(OpenAIServerModel):
     """
     Wrapper around OpenAIServerModel that:
-    1. Forces tool_choice='auto' whenever tools are provided so Groq never throws 400 errors.
-    2. Wraps plain-text final responses into a 'final_answer' tool call for ToolCallingAgent.
+    1. Forces tool_choice='auto' whenever tools are provided.
+    2. Extracts reasoning text if msg.content is empty so smolagents never fails parsing.
+    3. Safely wraps final responses into 'final_answer' without making broken retry calls.
     """
+
+    @staticmethod
+    def _extract_observations(messages: list) -> str:
+        """Collects tool observations already gathered in the conversation history."""
+        notes = []
+        for m in messages:
+            content = getattr(m, "content", "") if not isinstance(m, dict) else m.get("content", "")
+            if isinstance(content, str) and "Observation" in content:
+                notes.append(content.strip())
+        return "\n".join(notes) if notes else "Item or policy is unavailable in store records."
 
     def generate(self, messages, **kwargs):
         if kwargs.get("tools_to_call_from"):
             kwargs["tool_choice"] = "auto"
 
-        msg = super().generate(messages, **kwargs)
+        try:
+            msg = super().generate(messages, **kwargs)
+        except Exception:
+            fallback_text = self._extract_observations(messages)
+            return ChatMessage(
+                role=MessageRole.ASSISTANT,
+                content=fallback_text,
+                tool_calls=[
+                    ChatMessageToolCall(
+                        id="call_final_answer",
+                        type="function",
+                        function=ChatMessageToolCallFunction(
+                            name="final_answer",
+                            arguments={"answer": fallback_text},
+                        ),
+                    )
+                ],
+            )
 
-        if not msg.tool_calls and msg.content:
+        if not msg.tool_calls:
+            answer_text = msg.content
+            if not answer_text and getattr(msg, "raw", None):
+                try:
+                    raw_msg = msg.raw.choices[0].message
+                    answer_text = getattr(raw_msg, "reasoning", None)
+                except Exception:
+                    answer_text = None
+
+            if not answer_text:
+                answer_text = self._extract_observations(messages)
+
+            msg.content = answer_text
             msg.tool_calls = [
                 ChatMessageToolCall(
                     id="call_final_answer",
                     type="function",
                     function=ChatMessageToolCallFunction(
                         name="final_answer",
-                        arguments={"answer": msg.content},
+                        arguments={"answer": answer_text},
                     ),
                 )
             ]

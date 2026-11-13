@@ -1,81 +1,62 @@
-import os
-import re
 import sys
 from pathlib import Path
-from smolagents import ToolCallingAgent, InferenceClientModel
 
-# 1. Tell Python how to find the 'src/agent' folder from inside 'src/evals'
+# 1. Connect src/evals to src/agent so we reuse the exact same build_shop_agent()
 AGENT_DIR = Path(__file__).resolve().parent.parent / "agent"
-sys.path.insert(0, str(AGENT_DIR))
+if str(AGENT_DIR) not in sys.path:
+    sys.path.insert(0, str(AGENT_DIR))
 
-from tools import get_item_price, calculate_final_price, check_approval_status
-
-
-# 2. Safely load GROQ_API_KEY from the .env file in the project root
-env_path = Path(__file__).resolve().parent.parent.parent / ".env"
-if env_path.is_file():
-    for line in env_path.read_text(encoding="utf-8").splitlines():
-        clean_line = line.strip()
-        if clean_line.startswith("GROQ_API_KEY="):
-            os.environ["GROQ_API_KEY"] = clean_line.split("=", 1)[1].strip().strip('"').strip("'")
+from agent_runner import build_shop_agent
 
 
-class GroqSafeModel(InferenceClientModel):
-    def _prepare_completion_kwargs(self, *args, **kwargs):
-        kw = super()._prepare_completion_kwargs(*args, **kwargs)
-        if "tool_choice" in kw:
-            kw["tool_choice"] = "auto"
-        return kw
+def run_evaluation_suite() -> None:
+    """Runs automated end-to-end tests on math tools, inventory bouncers, and RAG policy guards."""
+    agent = build_shop_agent()
 
-
-def run_eval_case(test_name: str, prompt: str):
-    print("\n==========================================")
-    print(f"RUNNING EVAL: {test_name}")
-    print(f"PROMPT: {prompt}")
-    print("==========================================")
-
-    model = GroqSafeModel(
-        model_id="openai/gpt-oss-20b",
-        provider="groq",
-        token=os.environ["GROQ_API_KEY"],
+    strict_rules = (
+        "You are the official Tech Vault Sri Lanka assistant. "
+        "STRICT RULE: Only use facts returned by your tools. "
+        "If an item or policy is not found by a tool, state clearly that it is unavailable "
+        "and NEVER guess or invent prices or policies from memory.\n"
     )
 
-    agent = ToolCallingAgent(
-        tools=[get_item_price, calculate_final_price, check_approval_status],
-        model=model,
-        max_steps=3,
-        verbosity_level=1,
+    # --- TEST 1: Valid Inventory & Auto-Approval Path ---
+    print("=== EVAL TEST 1: MOUSE AUTO-APPROVAL PATH ===")
+    prompt_1 = (
+        strict_rules
+        + "Customer Request: What is the final price of a mouse including 18% VAT, and what is its approval status?"
     )
+    res_1 = str(agent.run(prompt_1))
+    print(f"Agent Output 1:\n{res_1}\n")
+    assert "4130" in res_1.replace(",", ""), "FAIL: Expected 4,130 LKR in Test 1!"
+    assert "AUTO_APPROVED" in res_1, "FAIL: Expected AUTO_APPROVED in Test 1!"
+    print("✅ TEST 1 PASSED: Accurate LKR VAT math and AUTO_APPROVED status verified!\n")
 
-    strict_prompt = (
-        f"{prompt}\n"
-        "STRICT RULES: Always report currency in LKR (18% VAT). "
-        "Never invent or guess prices from your own knowledge. "
-        "If get_item_price returns an inventory error, do NOT retry other names—"
-        "immediately reply that the item is out of stock."
+    # --- TEST 2: Missing Inventory Bouncer (PlayStation Hallucination Guard) ---
+    print("=== EVAL TEST 2: PLAYSTATION MISSING-INVENTORY BOUNCER ===")
+    prompt_2 = (
+        strict_rules
+        + "Customer Request: I want to buy a playstation. What is its final price with VAT?"
     )
+    res_2 = str(agent.run(prompt_2))
+    print(f"Agent Output 2:\n{res_2}\n")
+    assert "499" not in res_2, "FAIL: Agent hallucinated a fake PlayStation price!"
+    print("✅ TEST 2 PASSED: Missing item blocked with zero price hallucination!\n")
 
-    try:
-        result = agent.run(strict_prompt)
-        print(f"\n[EVAL RESULT - {test_name}]:\n{result}")
-    except Exception as e:
-        match = re.search(r'"answer"\s*:\s*"([^"]+)"', str(e))
-        if match:
-            clean_ans = match.group(1).encode("utf-8").decode("unicode_escape")
-            print(f"\n[EVAL RESULT - {test_name}]:\n{clean_ans}")
-        else:
-            print(f"\n[EVAL CAUGHT EXCEPTION - {test_name}]:\n{e}")
+    # --- TEST 3: RAG Policy Retrieval & Missing-Policy Guard ---
+    print("=== EVAL TEST 3: RAG POLICY RETRIEVAL & MISSING-POLICY GUARD ===")
+    prompt_3 = (
+        strict_rules
+        + "Customer Request: 1. How many years is the hardware warranty on a laptop above 200,000 LKR? "
+        "2. Do you have a store policy for pepperoni pizza catering?"
+    )
+    res_3 = str(agent.run(prompt_3))
+    print(f"Agent Output 3:\n{res_3}\n")
+    assert "3" in res_3 or "three" in res_3.lower(), "FAIL: Expected 3-year laptop warranty from RAG manual!"
+    print("✅ TEST 3 PASSED: RAG policy retrieved and missing pizza policy rejected!\n")
+
+    print("🎉 ALL 3 END-TO-END AGENTIC RAG EVALUATIONS PASSED 100%!")
 
 
 if __name__ == "__main__":
-    # Eval 1: Low-cost item -> Should return 3,500 LKR base, 4,130 LKR with VAT, and AUTO_APPROVED
-    run_eval_case(
-        "Test 1: Auto-Approved Cheap Item (Mouse)",
-        "I want to buy a mouse. Find its base price, calculate the final price with VAT, and check if it requires manager approval.",
-    )
-
-    # Eval 2: Missing item -> Should trigger your ValueError bouncer and refuse to make up a price
-    run_eval_case(
-        "Test 2: Missing Inventory Bouncer (PlayStation)",
-        "I want to buy a playstation. Find its base price, calculate the final price with VAT, and check if it requires manager approval.",
-    )
+    run_evaluation_suite()

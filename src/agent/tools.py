@@ -18,7 +18,7 @@ from retriever import retrieve_top_chunks
 
 
 @tool
-def get_item_price(item_name: str) -> float:
+def get_item_price(item_name: str) -> str:
     """
     Looks up the base price of an electronic item in the shop inventory in LKR.
 
@@ -32,8 +32,8 @@ def get_item_price(item_name: str) -> float:
     }
     clean_name = item_name.strip().lower()
     if clean_name not in prices:
-        raise ValueError(f"Error: '{item_name}' is not in the shop inventory.")
-    return prices[clean_name]
+        return f"Error: '{item_name}' is not in the shop inventory. Do NOT guess or invent a price."
+    return str(prices[clean_name])
 
 
 @tool
