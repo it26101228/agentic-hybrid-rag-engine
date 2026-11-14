@@ -1,7 +1,8 @@
-﻿{
+{
     "python.analysis.extraPaths": [
         "./src/ingestion",
         "./src/retrieval",
         "./src/agent"
-    ]
+    ],
+    "python.terminal.useEnvFile": true
 }

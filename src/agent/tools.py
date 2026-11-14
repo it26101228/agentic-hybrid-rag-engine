@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+
 from smolagents import tool
 
 # 1. Connect src/agent/tools.py to src/ingestion and src/retrieval
@@ -13,8 +14,8 @@ for folder in (INGESTION_DIR, RETRIEVAL_DIR):
     if str(folder) not in sys.path:
         sys.path.insert(0, str(folder))
 
-from loader import load_and_chunk_file
-from hybrid_retriever import retrieve_hybrid_chunks
+from loader import load_and_chunk_file  # type: ignore  # noqa: I001
+from hybrid_retriever import retrieve_hybrid_chunks  # type: ignore
 
 
 @tool
