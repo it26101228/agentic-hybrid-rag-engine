@@ -1,19 +1,32 @@
-# Agentic Hybrid RAG Engine 🚀
-Production-grade Applied AI Agent & Hybrid RAG Architecture built during a 9-week intensive sprint.
+# Agentic Hybrid RAG Engine (Tech Vault Sri Lanka)
 
-## 📊 Day 1 Benchmark Results (NVIDIA Tesla T4 GPU)
-Tested two open-source instruction-tuned models on structured JSON data extraction across 5 messy invoice emails:
+An industrial, modular **Agentic Hybrid Retrieval-Augmented Generation (RAG)** system built in Python using `smolagents`, **Groq Cloud LLM inference** (`openai/gpt-oss-20b`), and local **ONNX neural embeddings** (`fastembed` / `BAAI/bge-small-en-v1.5`).
 
-| Model Name | Parameters | Peak VRAM (GB)* | Throughput (tok/s) | JSON Validity (%) |
-| :--- | :---: | :---: | :---: | :---: |
-| Qwen/Qwen2.5-1.5B-Instruct | 1.5B | 8.64 | 26.1 | 100% |
-| Qwen/Qwen2.5-3B-Instruct | 3.0B | 11.52 | 20.6 | 100% |
+Designed and engineered by **Student ID: `it26101228`** as part of the Applied AI Systems Architect Sprint.
 
-*\*Note on VRAM: Measured in a shared notebook session where the Cell 1 `smolagents` `CodeAgent` instance retained ~5.6 GB of baseline VRAM on `cuda:0`. Standalone model weights account for ~3.0 GB (1.5B) and ~5.9 GB (3.0B) in `float16`.*
+---
 
-* **Key Takeaway:** Both models passed the strict Pydantic border guard (`InvoiceTicket`) with **100% validity (5/5)** using greedy decoding (`do_sample=False`), proving small open-weight models on a single T4 GPU are reliable for structured extraction when paired with schema validation.
+## 1. System Architecture Overview
 
-## 🛠️ Tech Stack
-* **Orchestration:** `smolagents` (`CodeAgent` with custom `@tool`)
-* **Inference & Benchmarking:** Hugging Face `transformers` (`float16`), PyTorch, Kaggle T4 GPUs
-* **Validation:** Pydantic v2 (`BaseModel`)
+Unlike single-notebook prototypes, this repository separates **Ingestion**, **Hybrid Retrieval**, **Agentic Tool Execution**, and **Automated End-to-End Evaluations** into isolated packages:
+
+```text
+agentic-hybrid-rag-engine/
+├── data/
+│   └── shop_policies.txt          # Official store warranty, dead-pixel, and Sri Lanka courier manual
+├── src/
+│   ├── ingestion/
+│   │   ├── chunker.py             # Sliding-window word chunker with 3 strict input bouncers
+│   │   └── loader.py              # File/directory guards & metadata card factory (chunk_id, source, text)
+│   ├── retrieval/
+│   │   ├── retriever.py           # Detective 1: Keyword search with stopword removal & plural stemming
+│   │   ├── vector_search.py       # Detective 2: 384-d neural semantic search (BAAI/bge-small-en-v1.5)
+│   │   └── hybrid_retriever.py    # Hybrid Boss: 50/50 normalized score fusion & chunk_id deduplication
+│   ├── agent/
+│   │   ├── tools.py               # 4 @tool functions for pricing, 18% VAT math, approvals & Hybrid RAG
+│   │   └── agent_runner.py        # ToolCallingAgent + GroqSafeModel (tool_choice='auto' & final_answer guard)
+│   └── evals/
+│       └── test_agent_bouncers.py # 4-test automated evaluation suite with strict assert verifications
+├── requirements.txt               # Pinned core dependencies (smolagents, huggingface_hub, openai, fastembed)
+├── PROGRESS_REPORT.md             # Day-by-day engineering sprint ledger
+└── README.md                      # System documentation and reproduction guide
