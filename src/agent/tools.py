@@ -59,7 +59,7 @@ def check_approval_status(final_price: float) -> str:
     """
     if final_price <= 0:
         raise ValueError("Error: Final price must be greater than 0.")
-    if final_price > 100000:
+    if final_price > 200000:
         return "MANAGER_APPROVAL_REQUIRED"
     return "AUTO_APPROVED"
 
