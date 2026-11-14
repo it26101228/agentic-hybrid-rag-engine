@@ -1,4 +1,5 @@
-smolagents
+﻿smolagents
 huggingface_hub
 openai
 fastembed
+python-dotenv

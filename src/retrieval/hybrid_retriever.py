@@ -75,9 +75,10 @@ def retrieve_hybrid_chunks(
         sem_score = card["semantic_score"]
         hybrid_score = round((0.5 * kw_norm) + (0.5 * sem_score), 4)
 
-        card["hybrid_score"] = hybrid_score
-        card["score"] = hybrid_score
-        final_cards.append(card)
+        if hybrid_score >= 0.20:
+            card["hybrid_score"] = hybrid_score
+            card["score"] = hybrid_score
+            final_cards.append(card)
 
     final_cards.sort(key=lambda item: item["hybrid_score"], reverse=True)
     return final_cards[:top_k]
