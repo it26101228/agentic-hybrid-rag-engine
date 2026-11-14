@@ -1,16 +1,17 @@
 import sys
 from pathlib import Path
 
-# 1. Connect src/evals to src/agent so we reuse the exact same build_shop_agent()
+# 1. Connect src/evals to src/agent so we reuse build_shop_agent() and search_shop_policies()
 AGENT_DIR = Path(__file__).resolve().parent.parent / "agent"
 if str(AGENT_DIR) not in sys.path:
     sys.path.insert(0, str(AGENT_DIR))
 
 from agent_runner import build_shop_agent
+from tools import search_shop_policies
 
 
 def run_evaluation_suite() -> None:
-    """Runs automated end-to-end tests on math tools, inventory bouncers, and RAG policy guards."""
+    """Runs automated end-to-end tests on math tools, inventory bouncers, RAG guards, and Hybrid meaning search."""
     agent = build_shop_agent()
 
     strict_rules = (
@@ -55,7 +56,15 @@ def run_evaluation_suite() -> None:
     assert "3" in res_3 or "three" in res_3.lower(), "FAIL: Expected 3-year laptop warranty from RAG manual!"
     print("✅ TEST 3 PASSED: RAG policy retrieved and missing pizza policy rejected!\n")
 
-    print("🎉 ALL 3 END-TO-END AGENTIC RAG EVALUATIONS PASSED 100%!")
+    # --- TEST 4: Hybrid Semantic Meaning Rescue (Zero Exact Keywords) ---
+    print("=== EVAL TEST 4: HYBRID SEMANTIC MEANING RESCUE ===")
+    hybrid_res = search_shop_policies("My screen has tiny black dots that won't light up")
+    print(f"Hybrid Tool Output:\n{hybrid_res}\n")
+    assert "dead pixels" in hybrid_res, "FAIL: Hybrid search missed the dead pixel policy!"
+    assert "Card 3" in hybrid_res, "FAIL: Expected Card 3 to be retrieved by Hybrid Search!"
+    print("✅ TEST 4 PASSED: Hybrid neural search rescued zero-keyword query!\n")
+
+    print("🎉 ALL 4 END-TO-END HYBRID AGENTIC RAG EVALUATIONS PASSED 100%!")
 
 
 if __name__ == "__main__":

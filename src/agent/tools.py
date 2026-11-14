@@ -14,7 +14,7 @@ for folder in (INGESTION_DIR, RETRIEVAL_DIR):
         sys.path.insert(0, str(folder))
 
 from loader import load_and_chunk_file
-from retriever import retrieve_top_chunks
+from hybrid_retriever import retrieve_hybrid_chunks
 
 
 @tool
@@ -67,17 +67,18 @@ def check_approval_status(final_price: float) -> str:
 @tool
 def search_shop_policies(query: str) -> str:
     """
-    Searches the official store policy and warranty manual for rules on warranties,
-    dead pixels, returns, refunds, and delivery/shipping costs across Sri Lanka.
+    Searches the official store policy and warranty manual using Hybrid RAG
+    (combining exact keyword search and neural semantic meaning search) for rules on
+    warranties, dead pixels, screen defects, returns, refunds, and delivery across Sri Lanka.
 
     Args:
-        query: Search keywords describing the policy question (e.g., 'Anuradhapura delivery cost').
+        query: Search query or customer problem description (e.g., 'Anuradhapura delivery cost' or 'screen has black dots').
     """
     if not query or not query.strip():
         raise ValueError("Error: search query cannot be empty.")
 
     chunks = load_and_chunk_file(file_path=POLICY_FILE, chunk_size=25, overlap=5)
-    results = retrieve_top_chunks(query=query, chunks=chunks, top_k=2)
+    results = retrieve_hybrid_chunks(query=query, chunks=chunks, top_k=2)
 
     if not results:
         return "No matching policies or instructions found. Do NOT guess or invent a policy or instructions."
@@ -85,15 +86,18 @@ def search_shop_policies(query: str) -> str:
     formatted_cards = []
     for match in results:
         formatted_cards.append(
-            f"[Card {match['chunk_id']} | Source: {match['source']} | Score: {match['score']}]: {match['text']}"
+            f"[Card {match['chunk_id']} | Source: {match['source']} | Hybrid Score: {match['hybrid_score']}]: {match['text']}"
         )
 
     return "\n".join(formatted_cards)
 
 
 if __name__ == "__main__":
-    print("=== TEST 1: VALID POLICY SEARCH (Laptop Warranty) ===")
+    print("=== TEST 1: HYBRID KEYWORD + MEANING (Laptop Warranty) ===")
     print(search_shop_policies("laptop warranty years motherboard"))
 
-    print("\n=== TEST 2: MISSING POLICY GUARD (Pepperoni Pizza) ===")
+    print("\n=== TEST 2: HYBRID MEANING RESCUE (Zero Exact Keywords!) ===")
+    print(search_shop_policies("My screen has tiny black dots that won't light up"))
+
+    print("\n=== TEST 3: MISSING POLICY GUARD (Pepperoni Pizza) ===")
     print(search_shop_policies("pepperoni pizza restaurant"))
