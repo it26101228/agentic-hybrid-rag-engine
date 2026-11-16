@@ -1,0 +1,4 @@
+retriever,overall_hit_rate_pct,keyword_hits,semantic_hits,out_of_scope_guards,avg_cpu_latency_ms
+1. Keyword-Only (Lexical),81.8,5/5,2/4,2/2,0.23
+2. Neural-Only (FastEmbed ONNX),100.0,5/5,4/4,2/2,110.07
+3. 50/50 Hybrid RAG (Boss),100.0,5/5,4/4,2/2,116.51
